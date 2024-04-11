@@ -1,0 +1,7 @@
+Flask
+pymongo
+numpy
+tensorflow
+Pillow
+pytesseract
+
