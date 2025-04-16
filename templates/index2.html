@@ -27,7 +27,13 @@
             text-align: center;
         }
 
+        input[type="file"] {
+            display: block;
+            margin: 0 auto 20px;
+        }
+
         button {
+            display: inline-block;
             padding: 10px 20px;
             background-color: #007bff;
             color: #fff;
@@ -42,14 +48,26 @@
             background-color: #0056b3;
         }
 
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background-color 0.3s;
+            margin-left: 10px;
+        }
+
+        .button:hover {
+            background-color: #0056b3;
+        }
+
         video, canvas, img {
             display: block;
             margin: 20px auto;
-        }
-
-        .btn {
-            display: inline-block;
-            margin: 10px;
         }
     </style>
 </head>
@@ -60,7 +78,7 @@
         <h2>📸 Capture from Camera</h2>
 
         <!-- Live video feed -->
-        <video id="video" width="320" height="240" autoplay playsinline></video>
+        <video id="video" width="320" height="240" autoplay></video>
 
         <!-- Capture button -->
         <button id="capture">📸 Capture Image</button>
@@ -86,19 +104,17 @@
         const preview = document.getElementById('preview');
         const cameraImageInput = document.getElementById('camera_image');
 
-        // Request rear camera on mobile
-        navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { exact: "environment" } }
-        })
-        .then(stream => {
-            video.srcObject = stream;
-        })
-        .catch(err => {
-            console.error("Error accessing camera:", err);
-            alert("Could not access camera. Please allow permission or check if a camera is available.");
-        });
+        // Ask for camera access
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+            })
+            .catch(err => {
+                console.error("Error accessing camera:", err);
+                alert("Could not access camera. Please allow permission or check if a camera is available.");
+            });
 
-        // Capture image
+        // Capture image and update preview + hidden input
         captureBtn.addEventListener('click', () => {
             canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
             const imageData = canvas.toDataURL('image/png');

@@ -7,6 +7,8 @@ from io import BytesIO
 import pymongo
 import pytesseract
 import easyocr
+import base64
+  
 from werkzeug.security import generate_password_hash, check_password_hash
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
@@ -125,28 +127,26 @@ def process_image(image_bytes):
 
 
 
-def update_dic(user_name, s):
-    query = {
-    'user_name': user_name,  # Filter by username
-    'text': s           # Filter by text
-    }
+def update_dic(user_name, s_list):
+    # Fetch all documents for this user
+    user_docs = collection.find({'user_name': user_name})
 
-
-# Execute the query and fetch the results
-    result = collection.find_one(query)
-    #result = collection.find_one({"name": name})
-    #result2 = collection.find_one({"text": s})
-    if result:
+    for doc in user_docs:
+        text_list = doc.get("text", [])
         
-        te=result.get("text2")
-        cost2=result.get("price")
-        db.collection.delete_one({"user_name":user_name,"text":s,"price":cost2})
-        db.collection2.insert_one({
-            "user_name": user_name,
-            "price": cost2,
-            "text":s,
-            "text2":te
-        })
+        # Count how many elements match with extracted s_list
+        match_count = len(set(text_list) & set(s_list))
+        
+        if match_count >= 2:
+            print("Found matching doc:", doc, flush=True)
+            
+            # Move document to collection2
+            collection2.insert_one(doc)
+            collection.delete_one({'_id': doc['_id']})
+            print("Moved document to collection2", flush=True)
+            return  # If you only want to move one doc
+
+    print("No matching document found with >= 2 common strings.", flush=True)
         
     
 
@@ -164,53 +164,89 @@ def save_to_mongodb(name, price, text,user_name,key,text2):
     })
 
 
-@app.route('/index', methods=['GET', 'POST'])
-def index():
+@app.route('/index3', methods=['GET', 'POST'])
+def index3():
     user_name = session.get('user_name')
     if request.method == 'POST':
         # Check if the post request has the file part
-        if 'file' not in request.files:
-            flash('No file part')
-            return redirect(request.url)
+        # if 'file' not in request.files:
+        #     flash('No file part')
+        #     return redirect(request.url)
         
-        file = request.files['file']
+        # file = request.files['file']
+        file = request.files.get('file')
+        camera_data = request.form.get('camera_image')
+
+        if not file and not camera_data:
+           flash('No image provided')
+           return redirect(request.url)
+
         
-        file.seek(0)
+        # file.seek(0)
         image_path='temp_image.jpg'
-        file.save(image_path)
+        if camera_data:
+           header, encoded = camera_data.split(',', 1)
+           image_data = base64.b64decode(encoded)
+           with open(image_path, 'wb') as f:
+             f.write(image_data)
+        else:
+           file.save(image_path)
+        # file.save(image_path)
         #s='na'
         extracted_text =extext(image_path)
-        file.seek(0)
+        # file.seek(0)
         extracted_texts =extext2(image_path)
-        file.seek(0)
+        # file.seek(0)
 
 
         price = request.form['price']
 
         # If the user does not select a file, the browser submits an empty file without a filename
-        if file.filename == '':
-            flash('No selected file')
-            return redirect(request.url)
+        # if file.filename == '':
+        #     flash('No selected file')
+        #     return redirect(request.url)
         
-        if file:
-            # Extract text from the image
-            #image = Image.open(file2)
-            #extracted_text = pytesseract.image_to_string(image)
-            s=extracted_text
-            ss=extracted_texts
+        # if file:
+        #     # Extract text from the image
+        #     #image = Image.open(file2)
+        #     #extracted_text = pytesseract.image_to_string(image)
+        #     s=extracted_text
+        #     ss=extracted_texts
 
-            filename = secure_filename(file.filename)
-            file_bytes = file.read()
-            identified_objects = process_image(file_bytes)
-            object_name = identified_objects[0][1]
-
-            save_to_mongodb(object_name, price,s,user_name,key,ss)
-
-            return render_template('index.html', objects=object_name, filename=filename, price=price,s=s)
-
-    return render_template('index.html')
+        #     filename = secure_filename(file.filename)
+        #     file_bytes = file.read()
+        #     identified_objects = process_image(file_bytes)
+        #     object_name = identified_objects[0][1]
 
 
+        file = request.files.get('file')
+        camera_data = request.form.get('camera_image')
+
+        object_name = None  # default
+
+        if file and file.filename:
+           filename = secure_filename(file.filename)
+           file_bytes = file.read()
+           identified_objects = process_image(file_bytes)
+           object_name = identified_objects[0][1]
+
+        elif camera_data:
+           with open(image_path, 'rb') as img:
+              image_bytes = img.read()
+           identified_objects = process_image(image_bytes)
+           object_name = identified_objects[0][1]
+        s=extracted_text
+        ss=extracted_texts
+
+        
+        save_to_mongodb(object_name, price,s,user_name,key,ss)
+        filename='pp'
+
+        return render_template('index3.html', objects=object_name, filename=filename, price=price,s=s)
+
+    return render_template('index3.html')
+
+  
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -223,7 +259,7 @@ def login():
             # Redirect to the index page or any other page you want
             #user_name=username
             session['user_name'] = username
-            return redirect(url_for('index'))
+            return redirect(url_for('index3'))
         else:
             flash('Invalid username/password')
             return redirect(url_for('login'))
@@ -247,6 +283,9 @@ def register():
         return redirect(url_for('login'))
     return render_template('register.html')
 
+
+
+
 @app.route('/')
 def home():
     return render_template('home.html')
@@ -256,18 +295,29 @@ def home():
 def calculate():
     #ans=sum(dict.values)
     user_name=session.get('user_name')
-    cut=collection2.find({'user_name':user_name})
+    cut_cursor=collection2.find({'user_name':user_name})
+    cut=list(cut_cursor)
     ans=0
     data = []
     #for collection2 in db.list_collection_names():
         #collection3 = db[collection2]
         #documents = collection3.find({}, {"_id": 0, "name": 1, "price": 1})  # Exclude _id field
         #data.extend(documents)
-    for doc in cut:
-        ans+=int(doc["price"])
+    if cut:
+        print("==== /calculate route hitpp ====", flush=True)
+        for doc in cut:
+          ans+=int(doc["price"])
+    else:
+
+       for doc in cut:
+          ans+=int(doc["price"])
         #ans=1
     documents = collection2.find({'user_name':user_name}, {"_id": 0, "text2": 1,"price":1})  # Exclude _id field
     data.extend(documents)
+    for doc in collection2.find({'user_name': user_name}):
+        print(doc,flush=True)
+        
+    print("==== /calculate route hit ====", flush=True)
     
     
     return render_template('calculate.html',data=data,ans=ans)
@@ -286,36 +336,61 @@ def view_data():
     ans=0
     user_name = session.get('user_name')
     if request.method == 'POST':
-        file = request.files['file']
-        
-        
-        if file:
-            filename = secure_filename(file.filename)
-            image_path='temp_image.jpg'
-            file.save(image_path)
-        #s='na'
-            extracted_text =extext(image_path)
-            s=extracted_text
-            file.seek(0)
-            file_bytes = file.read()
-            #image = cv2.imdecode(np.fromstring(file_bytes, np.uint8), cv2.IMREAD_GRAYSCALE)
-            #_, binary_image = cv2.threshold(image, 127, 255, cv2.THRESH_BINARY)
-            #num_labels, labeled_image = cv2.connectedComponents(binary_image)
-            #num_objects = num_labels
-            identified_object = process_image(file_bytes)
-            object_j=identified_object[0][1]
-            update_dic(user_name,s)
-            #result = collection2.find_one({"name": object_j})
-            
-                #if result: 
-                    #ans=1
+        # file = request.files['file']
+        camera_data = request.form.get('camera_image')
+        image_path='temp_image.jpg'
+        if camera_data:
+           print("Camera data received!", flush=True)
+           header, encoded = camera_data.split(',', 1)
+           image_data = base64.b64decode(encoded)
+           with open(image_path, 'wb') as f:
+             f.write(image_data)
+             s=extext(image_path)
+             update_dic(user_name,s)
+             return render_template('view_data.html')
 
-            #result = collection.find_one({"name": object_j})
-            #return render_template('view_data.html',object_j=object_j)
-            return render_template('view_data.html')
+
+        # if camera_data:
+        #     with open(image_path, 'rb') as img:
+        #       image_bytes = img.read()
+        #       identified_objects = process_image(image_bytes)
+            
+        #     object_name = identified_objects[0][1]
+        #     extract=extext(image_path)
+        #     update_dic(user_name,extract)
+        #     return render_template('view_data.html')
+        # return render_template('view_data.html')
+        
+        
+        # if file:
+        #     filename = secure_filename(file.filename)
+        #     image_path='temp_image.jpg'
+        #     file.save(image_path)
+        # #s='na'
+        #     extracted_text =extext(image_path)
+        #     s=extracted_text
+        #     file.seek(0)
+        #     file_bytes = file.read()
+        #     #image = cv2.imdecode(np.fromstring(file_bytes, np.uint8), cv2.IMREAD_GRAYSCALE)
+        #     #_, binary_image = cv2.threshold(image, 127, 255, cv2.THRESH_BINARY)
+        #     #num_labels, labeled_image = cv2.connectedComponents(binary_image)
+        #     #num_objects = num_labels
+        #     identified_object = process_image(file_bytes)
+        #     object_j=identified_object[0][1]
+        #     update_dic(user_name,s)
+        #     #result = collection2.find_one({"name": object_j})
+            
+        #         #if result: 
+        #             #ans=1
+
+        #     #result = collection.find_one({"name": object_j})
+        #     #return render_template('view_data.html',object_j=object_j)
+        #     return render_template('view_data.html')
                 
     return render_template('view_data.html')
 
 
 if __name__ == '__main__':
     app.run(debug=True)
+    # app.run(host='0.0.0.0', port=5000)
+

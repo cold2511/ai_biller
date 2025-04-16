@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Upload or Capture Image</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+        }
+
+        .section {
+            margin-bottom: 50px;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+        }
+
+        video, canvas, img {
+            display: block;
+            margin-top: 10px;
+            max-width: 100%;
+            border: 2px solid #444;
+            border-radius: 10px;
+        }
+
+        input, button {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🧾 Smart Grocery Billing</h1>
+
+    <!-- ====================== IMAGE UPLOAD ====================== -->
+    <div class="section">
+        <h2>📂 Upload Image</h2>
+        <form method="POST" action="/index" enctype="multipart/form-data">
+            <input type="file" name="file" accept="image/*" required><br>
+            <input type="text" name="price" placeholder="Enter Price" required><br>
+            <button type="submit">Upload Image</button>
+        </form>
+    </div>
+
+    <!-- ====================== CAMERA CAPTURE ====================== -->
+    <div class="section">
+        <h2>📷 Capture from Camera</h2>
+
+        <!-- Live video feed -->
+        <video id="video" width="320" height="240" autoplay playsinline></video>
+
+        <!-- Capture button -->
+        <button id="capture">📸 Capture Image</button>
+
+        <!-- Captured image preview -->
+        <canvas id="canvas" width="320" height="240" style="display:none;"></canvas>
+        <img id="preview" style="display:none;" alt="Captured Image">
+
+        <!-- Submit form -->
+        <form method="POST" action="/index3">
+            <input type="hidden" name="camera_image" id="camera_image">
+            <input type="text" name="price" placeholder="Enter Price" required><br>
+            <button type="submit">Submit Captured Image</button>
+        </form>
+        <a href="{{ url_for('view_data') }}" class="btn btn-primary">Checkout</a>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const captureBtn = document.getElementById('capture');
+        const cameraImageInput = document.getElementById('camera_image');
+        const preview = document.getElementById('preview');
+
+        // Use rear camera if available
+        navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { exact: "environment" } }
+        })
+        .then((stream) => {
+            video.srcObject = stream;
+        })
+        .catch((err) => {
+            console.error("Camera access error:", err);
+            alert("Could not access the camera.");
+        });
+
+        // Capture logic
+        captureBtn.addEventListener('click', () => {
+            const context = canvas.getContext('2d');
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const dataUrl = canvas.toDataURL('image/jpeg');
+            cameraImageInput.value = dataUrl;
+
+            preview.src = dataUrl;
+            preview.style.display = 'block';
+        });
+    </script>
+
+</body>
+</html>

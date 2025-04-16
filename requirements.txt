@@ -1,7 +1,8 @@
 Flask
-pymongo
+Werkzeug
 numpy
 tensorflow
-Pillow
+pillow
+pymongo
 pytesseract
-
+easyocr
