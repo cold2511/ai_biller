@@ -8,6 +8,10 @@ import pymongo
 import pytesseract
 import easyocr
 import base64
+import time
+from pymongo import MongoClient
+from pymongo.errors import ConnectionFailure
+from pymongo.write_concern import WriteConcern
   
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -24,10 +28,13 @@ client = pymongo.MongoClient("mongodb://localhost:27017/")
 #db2=client['h2']
 #collection = db["identified_objects"]
 #collection2=db["h22"]
-db = client.mydatabase
-collection = db.collection
-collection2 = db.collection2
-
+# db = client.mydatabase
+# collection = db.collection
+# collection2 = db.collection2
+db = client.get_database("mydb")
+collection = db.get_collection("collection", write_concern=WriteConcern("majority"))
+collection2 = db.get_collection("collection2", write_concern=WriteConcern("majority"))
+bil_time=[0,0]
 
 user_name='hr'
 key=generate_password_hash("password123")
@@ -41,75 +48,52 @@ reader = easyocr.Reader(['en'])
 
 
 
-def extext2(image_path):
-    result = reader.readtext(image_path)
-    #extracted_text = [text[1] for text in result]
+# def extext2(image_path):
+#     result = reader.readtext(image_path)
+    
+#     tallest_text = ''
+#     largest_height = 0
 
-    # Initialize variables to store the text with the highest confidence
-    #highest_confidence_text = ''
-    #highest_confidence_score = 0
+#     # Iterate through the result list
+#     for box, text, confidence in result:
+#         # Calculate the height of the current bounding box
+#         box_height = abs(box[3][0] - box[1][0])
 
-    # Iterate through the result list
-    #for box, text, confidence in result:
-        # Check if the confidence score of the current text is higher than the highest recorded confidence score
-        #if confidence > highest_confidence_score:
-            # Update the highest confidence text and score
-            #highest_confidence_text = text
-            #highest_confidence_score = confidence
+#         # Check if the height of the current bounding box is taller than the largest recorded height
+#         if box_height > largest_height:
+#             # Update the tallest text and height
+#             tallest_text = text
+#             largest_height = box_height
 
-    # Return the text with the highest confidence
-    #return highest_confidence_text
-    tallest_text = ''
-    largest_height = 0
+#     # Return the text with the largest height
+#     return tallest_text
 
-    # Iterate through the result list
-    for box, text, confidence in result:
-        # Calculate the height of the current bounding box
-        box_height = abs(box[3][0] - box[1][0])
+# def extext(image_path):
+#     result = reader.readtext(image_path)
+#     extracted_text = [text[1] for text in result]
 
-        # Check if the height of the current bounding box is taller than the largest recorded height
-        if box_height > largest_height:
-            # Update the tallest text and height
-            tallest_text = text
-            largest_height = box_height
+    
 
-    # Return the text with the largest height
-    return tallest_text
+#     return extracted_text
+
 
 def extext(image_path):
     result = reader.readtext(image_path)
-    extracted_text = [text[1] for text in result]
 
-    # Initialize variables to store the text with the highest confidence
-    #highest_confidence_text = ''
-    #highest_confidence_score = 0
+    extracted_texts = []
+    tallest_text = ''
+    largest_height = 0
 
-    # Iterate through the result list
-    #for box, text, confidence in result:
-        # Check if the confidence score of the current text is higher than the highest recorded confidence score
-        #if confidence > highest_confidence_score:
-            # Update the highest confidence text and score
-            #highest_confidence_text = text
-            #highest_confidence_score = confidence
+    for box, text, confidence in result:
+        extracted_texts.append(text)
 
-    # Return the text with the highest confidence
-    #return highest_confidence_text
-    #tallest_text = ''
-    #largest_height = 0
+        # Calculate height of the bounding box (vertical distance between two points)
+        box_height = abs(box[3][0] - box[1][0])
+        if box_height > largest_height:
+            tallest_text = text
+            largest_height = box_height
 
-    # Iterate through the result list
-    #for box, text, confidence in result:
-        # Calculate the height of the current bounding box
-        #box_height = abs(box[3][0] - box[1][0])
-
-        # Check if the height of the current bounding box is taller than the largest recorded height
-        #if box_height > largest_height:
-            # Update the tallest text and height
-            #tallest_text = text
-            #largest_height = box_height
-
-    # Return the text with the largest height
-    return extracted_text
+    return extracted_texts, tallest_text
 
 
 
@@ -127,40 +111,110 @@ def process_image(image_bytes):
 
 
 
-def update_dic(user_name, s_list):
-    # Fetch all documents for this user
-    user_docs = collection.find({'user_name': user_name})
+# def update_dic(user_name, s_list):
+#     # Fetch all documents for this user
+#     user_docs = collection.find({'user_name': user_name,"qty":{"$ne":0}})
 
-    for doc in user_docs:
-        text_list = doc.get("text", [])
+#     for doc in user_docs:
+#         text_list = doc.get("text", [])
         
-        # Count how many elements match with extracted s_list
-        match_count = len(set(text_list) & set(s_list))
+#         # Count how many elements match with extracted s_list
+#         match_count = len(set(text_list) & set(s_list))
         
-        if match_count >= 2:
-            print("Found matching doc:", doc, flush=True)
+#         if match_count >= 2:
+#             print("Found matching doc:", doc, flush=True)
             
-            # Move document to collection2
-            collection2.insert_one(doc)
-            collection.delete_one({'_id': doc['_id']})
-            print("Moved document to collection2", flush=True)
-            return  # If you only want to move one doc
+#             # Move document to collection2
 
-    print("No matching document found with >= 2 common strings.", flush=True)
+#             collection2.insert_one(doc)
+#             collection.update_one({'_id': doc['_id']},{"$inc":{"qty":-1}})
+#             print("Moved document to collection2", flush=True)
+#             return  # If you only want to move one doc
+
+#     print("No matching document found with >= 2 common strings.", flush=True)
+
+def update_dic(user_name, s_list):
+    s_list = [s.lower() for s in s_list]  # Normalize input list
+    with client.start_session() as session:
+        try:
+            with session.start_transaction():
+                user_docs = collection.find(
+                    {'user_name': user_name, "qty": {"$gt": 0}}, session=session
+                )
+
+                for doc in user_docs:
+                    text_list = [t.lower() for t in doc.get("text", [])]  # Normalize stored text
+                    match_count = len(set(text_list) & set(s_list))
+
+                    if match_count >= 2:
+                        print("✅ Found matching document:")
+                        print("📄 Document ID:", doc['_id'])
+                        print("📌 Document Text:", text_list)
+                        print("🎯 Common Elements:", list(set(text_list) & set(s_list)))
+
+                        # Ensure qty is still > 0 to avoid race condition
+                        result = collection.update_one(
+                            {'_id': doc['_id'], 'qty': {"$gt": 0}},
+                            {'$inc': {"qty": -1}},
+                            session=session
+                        )
+
+                        if result.modified_count == 1:
+                            collection2.insert_one(doc, session=session)
+                            print("✅ Moved document safely in transaction.")
+                            return
+            print("❌ No matching document found.")
+        except ConnectionFailure as e:
+            print("❌ Transaction aborted due to connection failure:", e)
         
     
 
 
 
 # Function to save data to MongoDB
-def save_to_mongodb(name, price, text,user_name,key,text2):
+# def save_to_mongodb(name, price, text,user_name,key,text2):
+#     db.collection.insert_one({
+#         "name": name,
+#         "price": price,
+#         "text": text,
+#         "user_name":user_name,
+#         "key":key,
+#         "text2":text2
+#     })
+
+def save_to_mongodb(name, price, text, user_name, key, text2):
+    # words_new = set(text.lower().split())
+    words_new = set(text)
+
+    # Find all documents by same user
+    candidates = db.collection.find({"user_name": user_name})
+    
+    for doc in candidates:
+        # words_existing = set(doc.get("text", "").lower().split())
+        words_existing = set(doc.get("text", ""))
+        common_words = words_new & words_existing
+        
+        if len(common_words) >= 2:
+            # Found a matching doc — get the uncommon words
+            uncommon_words = words_new - words_existing
+            if uncommon_words:
+                updated_text = doc["text"] + " " + " ".join(uncommon_words)
+                
+                db.collection.update_one(
+                    {"_id": doc["_id"]},
+                    {"$set": {"text": updated_text.strip(),"price":price},"$inc":{"qty":1}}
+                )
+            return  # Exit after first match
+
+    # If no match found with 2 common words, insert as new
     db.collection.insert_one({
         "name": name,
         "price": price,
         "text": text,
-        "user_name":user_name,
-        "key":key,
-        "text2":text2
+        "user_name": user_name,
+        "key": key,
+        "text2": text2,
+        "qty":1
     })
 
 
@@ -193,9 +247,9 @@ def index3():
            file.save(image_path)
         # file.save(image_path)
         #s='na'
-        extracted_text =extext(image_path)
+        
         # file.seek(0)
-        extracted_texts =extext2(image_path)
+        extracted_text,extracted_texts =extext(image_path)
         # file.seek(0)
 
 
@@ -219,22 +273,22 @@ def index3():
         #     object_name = identified_objects[0][1]
 
 
-        file = request.files.get('file')
-        camera_data = request.form.get('camera_image')
+        # file = request.files.get('file')
+        # camera_data = request.form.get('camera_image')
 
         object_name = None  # default
 
-        if file and file.filename:
-           filename = secure_filename(file.filename)
-           file_bytes = file.read()
-           identified_objects = process_image(file_bytes)
-           object_name = identified_objects[0][1]
+        # if file and file.filename:
+        #    filename = secure_filename(file.filename)
+        #    file_bytes = file.read()
+        #    identified_objects = process_image(file_bytes)
+        #    object_name = identified_objects[0][1]
 
-        elif camera_data:
-           with open(image_path, 'rb') as img:
-              image_bytes = img.read()
-           identified_objects = process_image(image_bytes)
-           object_name = identified_objects[0][1]
+        # elif camera_data:
+        #    with open(image_path, 'rb') as img:
+        #       image_bytes = img.read()
+        #    identified_objects = process_image(image_bytes)
+        #    object_name = identified_objects[0][1]
         s=extracted_text
         ss=extracted_texts
 
@@ -329,7 +383,7 @@ def thank_you():
     db.collection2.delete_many({'user_name':user_name})
     return render_template('thank_you.html')
 
-@app.route('/view_data', methods=['GET','POST'])
+@app.route('/view_data2', methods=['GET','POST'])
 def view_data():
     #dict={'na':'0'}
     object_j='hh'
@@ -337,17 +391,44 @@ def view_data():
     user_name = session.get('user_name')
     if request.method == 'POST':
         # file = request.files['file']
+
         camera_data = request.form.get('camera_image')
+        file = request.files.get('file')
         image_path='temp_image.jpg'
         if camera_data:
+           s_time=time.time()
            print("Camera data received!", flush=True)
            header, encoded = camera_data.split(',', 1)
            image_data = base64.b64decode(encoded)
            with open(image_path, 'wb') as f:
              f.write(image_data)
-             s=extext(image_path)
+             s,ss=extext(image_path)
              update_dic(user_name,s)
-             return render_template('view_data.html')
+             a11=bil_time[0]
+             a22=bil_time[1]
+             dd=(a11*a22)+(time.time()-(s_time))
+             a22=a22+1
+             naver=dd/a22
+             print(f"Avg latency: {naver:.4f}s")
+             bil_time[0]=naver
+             bil_time[1]=a22
+
+             return render_template('view_data2.html')
+        else:
+            s_timee=time.time()
+            file.save(image_path)
+            s,ss=extext(image_path)
+            update_dic(user_name,s)
+            a111=bil_time[0]
+            a222=bil_time[1]
+            dd=(a111*a222)+(time.time()-(s_timee))
+            a222=a222+1
+            naveer=dd/a222
+            print(f"Avg latency: {naveer:.4f}s")
+            bil_time[0]=naveer
+            bil_time[1]=a222
+            return render_template('view_data2.html')
+
 
 
         # if camera_data:
@@ -387,7 +468,7 @@ def view_data():
         #     #return render_template('view_data.html',object_j=object_j)
         #     return render_template('view_data.html')
                 
-    return render_template('view_data.html')
+    return render_template('view_data2.html')
 
 
 if __name__ == '__main__':
