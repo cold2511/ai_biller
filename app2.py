@@ -20,7 +20,7 @@ pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tessera
 #app = Flask(__name__)
 app = Flask(__name__, static_url_path='/static')
 
-app.secret_key = 'your_secret_key'
+app.secret_key = 'this_is_it'
 
 # MongoDB connection
 client = pymongo.MongoClient("mongodb://localhost:27017/")
