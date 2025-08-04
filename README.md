@@ -17,72 +17,59 @@ A Flask-based web application for image-based product identification, user authe
 - Tesseract OCR
 - EasyOCR
 
-## Installation
+## How to Run
 
-1. **Clone the repository:**
+### 🧠 Prerequisites
 
-    ```bash
-    git clone https://github.com/cold2511/ai_biller.git
-    cd ai_biller
-    ```
+- Python 3.8+
+- pip
+- MongoDB installed locally
+- `mongosh` for shell interaction
+- Git
 
-2. **Create a virtual environment:**
+### 📦 Clone Repository
 
-    ```bash
-    python -m venv venv
-    ```
+```bash
+git clone https://github.com/your-username/scanner-less-biller.git
+cd scanner-less-biller
 
-3. **Activate the virtual environment:**
+🐍 Create Virtual Environment & Install Requirements
+python -m venv venv
+source venv/bin/activate    # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
 
-    - On Windows:
+⚙️ Set Up MongoDB Replica Set
+MongoDB must be in replica set mode to allow transactions.
 
-        ```bash
-        venv\Scripts\activate
-        ```
+Stop any existing MongoDB service:
+sudo systemctl stop mongod
 
-    - On macOS/Linux:
+Start a single-node replica set manually:
+mongod --dbpath /data/db --replSet "rs0"
 
-        ```bash
-        source venv/bin/activate
-        ```
 
-4. **Install the dependencies:**
+Make sure /data/db exists or create it with sudo mkdir -p /data/db
 
-    ```bash
-    pip install -r requirements.txt
-    ```
+Open a new terminal and initiate replica set:
+mongosh
 
-5. **Set up MongoDB:**
+Then inside mongosh:
 
-    Ensure MongoDB is installed and running on your machine. By default, the app connects to a local MongoDB instance:
+rs.initiate()
 
-    ```plaintext
-    mongodb://localhost:27017/
-    ```
+You should see: "ok" : 1 in the result.
 
-6. **Set up Tesseract OCR:**
+Optionally, check replica set status:
 
-    Install Tesseract OCR from [here](https://github.com/tesseract-ocr/tesseract).
+rs.status()
 
-7. **Set up environment variables:**
+Now your MongoDB is replica-set enabled.
 
-    Create a `.env` file in the project root directory and add the following:
+🚀 Run the App
+python app2.py
 
-    ```env
-    SECRET_KEY=your_secret_key
-    ```
+Navigate to http://127.0.0.1:5000 in your browser.
 
-## Running the Application
-
-1. **Start the Flask application:**
-
-    ```bash
-    python app.py
-    ```
-
-2. **Access the application:**
-
-    Open your web browser and go to `http://127.0.0.1:5000`.
 
 ## Usage
 
